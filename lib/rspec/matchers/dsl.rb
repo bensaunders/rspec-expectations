@@ -59,11 +59,26 @@ module RSpec
         def match(&match_block)
           define_user_override(:matches?, match_block) do |actual|
             begin
-              @actual = actual
+              if Proc === actual
+                @actual =
+                  Proc.new do |*args, &block|
+                    begin
+                      actual.call(*args, &block)
+                    rescue RSpec::Expectations::ExpectationNotMetError => error
+                      @actual_error = error
+                      raise error
+                    end
+                  end
+              else
+                @actual = actual
+              end
               RSpec::Support.with_failure_notifier(RAISE_NOTIFIER) do
                 super(*actual_arg_for(match_block))
               end
             rescue RSpec::Expectations::ExpectationNotMetError
+              RSpec::Support.with_failure_notifier(RAISE_NOTIFIER) do
+                raise actual_error if actual_error
+              end
               false
             end
           end
@@ -358,6 +373,9 @@ module RSpec
         # object wrapped by `expect`.
         attr_reader :actual
 
+        # @private
+        attr_accessor :actual_error
+
         # Exposes the exception raised during the matching by `match_unless_raises`.
         # Could be useful to extract details for a failure message.
         attr_reader :rescued_exception
@@ -372,6 +390,7 @@ module RSpec
         def initialize(name, declarations, matcher_execution_context, *expected, &block_arg)
           @name     = name
           @actual   = nil
+          @actual_error = nil
           @expected_as_array = expected
           @matcher_execution_context = matcher_execution_context
           @chained_method_clauses = []

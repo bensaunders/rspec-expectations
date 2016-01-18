@@ -792,6 +792,17 @@ module RSpec::Matchers::DSL
         expect(3).to matcher
         expect { 3 }.to matcher
       end
+
+      it 'will not swallow expectation errors from blocks' do
+        matcher = new_matcher(:foo) do
+          match { |actual| actual.call; true }
+          supports_block_expectations
+        end
+
+        expect {
+          expect { raise RSpec::Expectations::ExpectationNotMetError.new('original') }.to matcher
+        }.to raise_error(RSpec::Expectations::ExpectationNotMetError, /original/)
+      end
     end
 
     context "#new" do
